@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
 use near_sdk::{env, log, near_bindgen, AccountId, CryptoHash};
-use near_sdk::{init, BorshStorageKey};
+use near_sdk::{init, BorshStorageKey, PanicOnDefault};
 
 use crate::key::ContractKeys;
 use vote::*;
@@ -14,14 +14,13 @@ mod vote;
 type VoteId = CryptoHash;
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize,PanicOnDefault)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct YesOrNoContract {
-    pub vote: LookupMap<VoteId, Vote>,
+    vote: LookupMap<VoteId, Vote>,
 
-    pub voter: LookupMap<AccountId, Voter>,
+    voter: LookupMap<AccountId, Voter>,
 }
 
-i
 impl YesOrNoContract {
     #[init]
     pub fn new() -> Self {
