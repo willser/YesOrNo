@@ -254,6 +254,21 @@ mod tests {
     }
 
     #[test]
+    fn test_vote() {
+        let mut contract = create_vm_and_get_contract();
+
+        let input_vote = get_legal_vote();
+        let vote_id = contract.create_vote(input_vote);
+
+        contract.vote(vote_id, true);
+
+        let finish_vec = contract.get_finish_vote_list(0, 10);
+        let active_vec = contract.get_active_vote_list(0, 10);
+        assert_eq!(finish_vec.len(), 1);
+        assert_eq!(active_vec.len(), 0);
+    }
+
+    #[test]
     #[should_panic(expected = "exist same vote")]
     fn test_crate_vote_repeat() {
         let mut contract = create_vm_and_get_contract();
