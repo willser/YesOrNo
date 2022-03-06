@@ -1,7 +1,6 @@
 use crate::VoteId;
-use near_primitives_core::types::AccountId;
 use near_sdk::borsh::{self, BorshSerialize};
-use near_sdk::BorshStorageKey;
+use near_sdk::{AccountId, BorshStorageKey};
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum ContractKeys {
