@@ -26,7 +26,10 @@ pub struct Vote {
     active: bool,
 
     /// If `finish's` length greater than `threshold`,then finish this vote,it be Completed.
-    threshold: u32,
+    threshold: u64,
+
+    /// count of yes
+    count: u64,
 
     /// set of finisher's accountId
     finish: UnorderedMap<AccountId, (Choose, Timestamp)>,
@@ -52,7 +55,7 @@ pub struct InputVote {
     active: bool,
 
     /// If `finish's` length greater than `threshold`,then finish this vote,it be Completed.
-    threshold: u32,
+    threshold: u64,
 
     thinking: HashSet<AccountId>,
 }
@@ -74,6 +77,7 @@ fn convert(input: &InputVote, id: VoteId) -> Vote {
         link: input.link.clone(),
         active: false,
         threshold: input.threshold,
+        count: 0,
         finish: UnorderedMap::new(VoteFinish(id)),
         thinking: UnorderedSet::new(VoteThinking(id)),
         create_time: env::block_timestamp(),
@@ -132,7 +136,7 @@ impl YesOrNoContract {
         if vote_map.contains_key(&id) {
             panic!("exist same vote");
         }
-        if (input_vote.thinking.len() as u32) < input_vote.threshold {
+        if (input_vote.thinking.len() as u64) < input_vote.threshold {
             panic!("illegal threshold or participant number");
         }
 
@@ -191,16 +195,16 @@ impl YesOrNoContract {
     }
 
     pub fn vote(&mut self, id: VoteId, choose: Choose) {
-        let voter_map = &self.voter;
-        let vote_map = &self.vote;
+        let voter_map = &mut self.voter;
+        let vote_map = &mut self.vote;
 
-        let vote = vote_map.get(&id).expect("no such vote");
+        let mut vote = vote_map.get(&id).expect("no such vote");
         let account_id = &env::current_account_id();
         let mut voter = voter_map
             .get(account_id)
             .expect("no vote for this accountId");
 
-        let title = vote.title;
+        let title = &vote.title;
 
         if !(&voter.thinking).contains(&(id, title.clone())) {
             panic!("finished vote")
@@ -208,7 +212,38 @@ impl YesOrNoContract {
 
         (voter.thinking.borrow_mut()).remove(&(id, title.clone()));
 
-        (voter.finish.borrow_mut()).insert(&(id, title.clone(), choose, env::block_timestamp()));
+        let timestamp = env::block_timestamp();
+        (voter.finish.borrow_mut()).insert(&(id, title.clone(), choose, timestamp));
+
+        vote.thinking.remove(account_id);
+        vote.finish.insert(&account_id, &(choose, timestamp));
+
+        if choose {
+            vote.count = vote.count + 1;
+        }
+
+        // finish by yes
+        if vote.count >= vote.threshold {
+            vote.active = false;
+            vote.finish_time = Some(timestamp);
+        }
+
+        // finish by no
+        if vote.thinking.len() + vote.count < vote.threshold {
+            vote.active = false;
+            vote.finish_time = Some(timestamp);
+        }
+
+        // flush data
+        voter_map.insert(
+            account_id,
+            &Voter {
+                thinking: voter.thinking,
+                finish: voter.finish,
+            },
+        );
+
+        vote_map.insert(&vote.id, &vote);
     }
 
     pub fn get_vote(&self, vote_id: VoteId) -> Option<Vote> {
