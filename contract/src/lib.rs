@@ -1,10 +1,11 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap};
-use near_sdk::{env, log, near_bindgen, AccountId, CryptoHash};
-use near_sdk::{init, BorshStorageKey, PanicOnDefault};
+use near_sdk::collections::LookupMap;
+use near_sdk::{init, PanicOnDefault};
+use near_sdk::{near_bindgen, AccountId, CryptoHash};
+
+use vote::*;
 
 use crate::key::ContractKeys;
-use vote::*;
 
 near_sdk::setup_alloc!();
 
