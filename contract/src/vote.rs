@@ -256,13 +256,12 @@ mod tests {
     use super::*;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::{testing_env, MockedBlockchain, VMContext};
-    use std::borrow::Borrow;
     use std::convert::TryInto;
+    use std::ops::Range;
 
-    fn get_context(is_view: bool) -> VMContext {
+    fn get_context(is_view: bool, index: usize) -> VMContext {
         VMContextBuilder::new()
-            .signer_account_id(accounts(1).try_into().unwrap())
-            .current_account_id(accounts(1).try_into().unwrap())
+            .current_account_id(accounts(index).try_into().unwrap())
             .is_view(is_view)
             .build()
     }
@@ -270,9 +269,12 @@ mod tests {
 
     #[test]
     fn test_crate_vote() {
-        let mut contract = create_vm_and_get_contract();
+        let context = get_context(false, 1);
+        testing_env!(context);
 
-        let input_vote = get_legal_vote();
+        let mut contract = YesOrNoContract::new();
+
+        let input_vote = get_legal_vote(0..3);
         let vote_id = contract.create_vote(input_vote);
 
         let vote = contract.get_vote(vote_id).expect("test error:no such vote");
@@ -281,18 +283,37 @@ mod tests {
         let alice: AccountId = accounts(1).try_into().unwrap();
         assert_eq!(vote.initiator, alice);
 
-        (1..3).for_each(|temp| -> () {
-            let id = accounts(temp).to_string();
-            assert_eq!(contract.voter.borrow().get(&id).unwrap().thinking.len(), 1);
-            assert_eq!(contract.voter.borrow().get(&id).unwrap().finish.len(), 0);
-        })
+        (0..3).for_each(|temp| -> () {
+            let context = get_context(false, temp);
+            testing_env!(context);
+
+            assert_eq!(contract.get_active_vote_list(0, 10).len(), 1);
+            assert_eq!(contract.get_finish_vote_list(0, 10).len(), 0);
+
+            contract.vote(vote_id, true);
+
+            assert_eq!(contract.get_active_vote_list(0, 10).len(), 0);
+            assert_eq!(contract.get_finish_vote_list(0, 10).len(), 1);
+        });
+
+        let vote = contract.get_vote(vote_id).unwrap();
+
+        assert_eq!(vote.count, 3);
+        assert_eq!(vote.active, false);
+        assert_eq!(vote.finish.len(), 3);
+        assert_eq!(vote.thinking.len(), 0);
+        assert!(vote.count >= vote.threshold);
+        vote.finish_time.unwrap();
     }
 
     #[test]
     fn test_vote() {
-        let mut contract = create_vm_and_get_contract();
+        let context = get_context(false, 0);
+        testing_env!(context);
 
-        let input_vote = get_legal_vote();
+        let mut contract = YesOrNoContract::new();
+
+        let input_vote = get_legal_vote(0..3);
         let vote_id = contract.create_vote(input_vote);
 
         contract.vote(vote_id, true);
@@ -306,29 +327,26 @@ mod tests {
     #[test]
     #[should_panic(expected = "exist same vote")]
     fn test_crate_vote_repeat() {
-        let mut contract = create_vm_and_get_contract();
-        let input_vote = get_legal_vote();
-        contract.create_vote(input_vote);
-
-        let input_vote = get_legal_vote();
-        contract.create_vote(input_vote);
-    }
-
-    fn create_vm_and_get_contract() -> YesOrNoContract {
-        let context = get_context(false);
+        let context = get_context(false, 0);
         testing_env!(context);
 
-        YesOrNoContract::new()
+        let mut contract = YesOrNoContract::new();
+
+        let input_vote = get_legal_vote(0..3);
+        contract.create_vote(input_vote);
+
+        let input_vote = get_legal_vote(0..3);
+        contract.create_vote(input_vote);
     }
 
-    fn get_legal_vote() -> InputVote {
+    fn get_legal_vote(range: Range<usize>) -> InputVote {
         InputVote {
             title: TEST_TITLE.to_string(),
             desc: None,
             link: None,
             active: false,
             threshold: 2,
-            thinking: (1..3).map(|temp| accounts(temp).to_string()).collect(),
+            thinking: range.map(|temp| accounts(temp).to_string()).collect(),
         }
     }
 }
