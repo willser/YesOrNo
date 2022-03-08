@@ -1,18 +1,17 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
 use near_sdk::{init, PanicOnDefault};
-use near_sdk::{near_bindgen, AccountId, CryptoHash};
-
-use vote::*;
+use near_sdk::{near_bindgen, AccountId};
 
 use crate::key::ContractKeys;
-
-near_sdk::setup_alloc!();
+use crate::types::{Choose, VoteId};
+use crate::vote::{Vote, Voter};
 
 mod key;
+mod types;
 mod vote;
 
-type VoteId = CryptoHash;
+near_sdk::setup_alloc!();
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]

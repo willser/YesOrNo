@@ -5,9 +5,7 @@ use std::borrow::BorrowMut;
 use std::collections::HashSet;
 
 use crate::key::VoteKeys::*;
-use crate::{VoteId, YesOrNoContract};
-
-type Choose = bool;
+use crate::{Choose, VoteId, YesOrNoContract};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Vote {
@@ -114,7 +112,7 @@ impl YesOrNoContract {
         for x in &input_vote.thinking {
             assert!(env::is_valid_account_id(x.as_bytes()));
 
-            match (&self.voter).get(&x) {
+            match (&self.voter).get(x) {
                 Some(mut voter) => {
                     voter.thinking.insert(thinking_vote);
                 }
@@ -122,7 +120,7 @@ impl YesOrNoContract {
                     let mut set = UnorderedSet::new(VoterThinking(x.clone()));
                     set.insert(thinking_vote);
                     self.voter.borrow_mut().insert(
-                        &x,
+                        x,
                         &Voter {
                             thinking: set,
                             finish: UnorderedSet::new(VoterFinish(x.clone())),
@@ -150,7 +148,7 @@ impl YesOrNoContract {
         let voter = &self.voter;
         let voter_list = voter.get(&env::current_account_id());
 
-        return match voter_list {
+        match voter_list {
             None => {
                 vec![]
             }
@@ -161,11 +159,11 @@ impl YesOrNoContract {
                     return vec![];
                 }
 
-                return (index..std::cmp::min(index + limit, thinking_set.len()))
+                (index..std::cmp::min(index + limit, thinking_set.len()))
                     .map(|index| thinking_set.as_vector().get(index).unwrap())
-                    .collect();
+                    .collect()
             }
-        };
+        }
     }
 
     pub fn get_finish_vote_list(
@@ -176,7 +174,7 @@ impl YesOrNoContract {
         let voter = &self.voter;
         let voter_option = voter.get(&env::current_account_id());
 
-        return match voter_option {
+        match voter_option {
             None => {
                 vec![]
             }
@@ -187,11 +185,11 @@ impl YesOrNoContract {
                     return vec![];
                 }
 
-                return (index..std::cmp::min(index + limit, finish_set.len()))
+                (index..std::cmp::min(index + limit, finish_set.len()))
                     .map(|index| finish_set.as_vector().get(index).unwrap())
-                    .collect();
+                    .collect()
             }
-        };
+        }
     }
 
     pub fn vote(&mut self, id: VoteId, choose: Choose) {
@@ -216,10 +214,10 @@ impl YesOrNoContract {
         (voter.finish.borrow_mut()).insert(&(id, title.clone(), choose, timestamp));
 
         vote.thinking.remove(account_id);
-        vote.finish.insert(&account_id, &(choose, timestamp));
+        vote.finish.insert(account_id, &(choose, timestamp));
 
         if choose {
-            vote.count = vote.count + 1;
+            vote.count += 1;
         }
 
         // finish by yes
