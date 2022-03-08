@@ -4,10 +4,11 @@ use near_sdk::{init, PanicOnDefault};
 use near_sdk::{near_bindgen, AccountId};
 
 use crate::key::ContractKeys;
-use crate::types::{Choose, VoteId};
+use crate::types::{Choose, ReviewId, ThingsId, VoteId};
 use crate::vote::{Vote, Voter};
 
 mod key;
+mod review;
 mod types;
 mod vote;
 
