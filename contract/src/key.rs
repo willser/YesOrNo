@@ -1,12 +1,12 @@
-use crate::VoteId;
-use near_primitives_core::serialize;
+use crate::{ItemId, VoteId};
 use near_sdk::borsh::{self, BorshSerialize};
-use near_sdk::{AccountId, BorshStorageKey, CryptoHash};
+use near_sdk::{AccountId, BorshStorageKey};
 
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum ContractKeys {
     ContractVote,
     ContractVoter,
+    Review,
 }
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum VoteKeys {
@@ -14,4 +14,10 @@ pub enum VoteKeys {
     VoteThinking(VoteId),
     VoterFinish(AccountId),
     VoterThinking(AccountId),
+}
+
+#[derive(BorshStorageKey, BorshSerialize)]
+pub enum ItemKeys {
+    Active(ItemId),
+    Negative(ItemId),
 }
