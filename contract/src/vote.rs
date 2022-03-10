@@ -73,7 +73,7 @@ fn convert(input: &InputVote, id: VoteId) -> Vote {
         title: input.title.clone(),
         desc: input.desc.clone(),
         link: input.link.clone(),
-        active: false,
+        active: true,
         threshold: input.threshold,
         count: 0,
         finish: UnorderedMap::new(VoteFinish(id)),
