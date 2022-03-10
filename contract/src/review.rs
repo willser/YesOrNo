@@ -3,7 +3,7 @@ use near_sdk::collections::UnorderedSet;
 use near_sdk::{env, AccountId};
 
 use crate::key::ItemKeys::{Active, Negative};
-use crate::{ItemId, YesOrNoContract};
+use crate::{Choose, ItemId, YesOrNoContract};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Item {
@@ -23,7 +23,12 @@ pub struct Item {
 }
 
 impl YesOrNoContract {
-    pub fn create_review(&mut self, title: String, desc: Option<String>, link: Option<String>) {
+    pub fn create_review(
+        &mut self,
+        title: String,
+        desc: Option<String>,
+        link: Option<String>,
+    ) -> ItemId {
         let initiator = env::current_account_id();
 
         let empty = String::default();
@@ -38,7 +43,7 @@ impl YesOrNoContract {
 
         let review = &mut self.review;
 
-        if review.get(&item_id).is_none() {
+        if review.get(&item_id).is_some() {
             panic!("exist same review")
         };
 
@@ -54,11 +59,83 @@ impl YesOrNoContract {
                 negative: UnorderedSet::new(Negative(item_id)),
             },
         );
+
+        item_id
+    }
+
+    /// post a review about item
+    pub fn review(&mut self, item_id: ItemId, opinion: Choose) {
+        let review = &mut self.review;
+
+        let item = &mut review.get(&item_id).expect("no such item.");
+
+        let account_id = &env::current_account_id();
+
+        if opinion {
+            item.negative.remove(account_id);
+            item.active.insert(account_id);
+        } else {
+            item.negative.insert(account_id);
+            item.active.remove(account_id);
+        }
+
+        review.insert(&item_id, item);
+    }
+
+    /// get item by itemId
+    pub fn get_item(&self, item_id: ItemId) -> Item {
+        let review = &self.review;
+        review.get(&item_id).expect("no such item.")
     }
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
+    use crate::YesOrNoContract;
+    use near_sdk::env;
+    use near_sdk::test_utils::{accounts, VMContextBuilder};
+    use near_sdk::testing_env;
 
     #[test]
-    fn test() {}
+    fn test_create_review() {
+        let context = VMContextBuilder::new()
+            .current_account_id(accounts(1).try_into().unwrap())
+            .is_view(false)
+            .build();
+
+        testing_env!(context);
+
+        let mut contract = YesOrNoContract::new();
+
+        let item_id = contract.create_review(
+            String::from("title"),
+            Option::Some(String::from("desc")),
+            Option::Some(String::from("https://github.com")),
+        );
+
+        contract.review(item_id, true);
+        let item = &contract.get_item(item_id);
+
+        assert_eq!(item.active.len(), 1);
+        assert_eq!(item.negative.len(), 0);
+
+        contract.review(item_id, false);
+        let item = &contract.get_item(item_id);
+        assert_eq!(item.active.len(), 0);
+        assert_eq!(item.negative.len(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "no such item.")]
+    fn test_illegal_id() {
+        let context = VMContextBuilder::new()
+            .current_account_id(accounts(1).try_into().unwrap())
+            .is_view(false)
+            .build();
+
+        testing_env!(context);
+
+        let mut contract = YesOrNoContract::new();
+        contract.review(env::sha256("".as_bytes()).try_into().unwrap(), false);
+    }
 }
