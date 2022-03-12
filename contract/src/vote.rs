@@ -1,13 +1,14 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{UnorderedMap, UnorderedSet};
-use near_sdk::{env, AccountId, Timestamp};
+use near_sdk::collections::UnorderedSet;
+use near_sdk::{env, near_bindgen, AccountId, Timestamp};
+use serde::{Deserialize, Serialize};
 use std::borrow::BorrowMut;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::key::VoteKeys::*;
-use crate::{Choose, VoteId, YesOrNoContract};
+use crate::*;
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
 pub struct Vote {
     id: VoteId,
 
@@ -29,18 +30,18 @@ pub struct Vote {
     /// count of yes
     count: u64,
 
-    /// set of finisher's accountId
-    finish: UnorderedMap<AccountId, (Choose, Timestamp)>,
+    /// map of finisher's accountId
+    finish: HashMap<AccountId, (Choose, Timestamp)>,
 
     /// set of accountId who not vote yet
-    thinking: UnorderedSet<AccountId>,
+    thinking: HashSet<AccountId>,
 
     create_time: Timestamp,
 
     finish_time: Option<Timestamp>,
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Deserialize, Serialize)]
 pub struct InputVote {
     title: String,
 
@@ -49,13 +50,26 @@ pub struct InputVote {
     /// link of additional description or introduction
     link: Option<String>,
 
-    /// `vote` status
-    active: bool,
-
     /// If `finish's` length greater than `threshold`,then finish this vote,it be Completed.
     threshold: u64,
 
     thinking: HashSet<AccountId>,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize)]
+pub struct ActiveVote {
+    vote_id: VoteId,
+    title: String,
+}
+
+#[allow(dead_code)]
+#[derive(Serialize)]
+pub struct FinishVote {
+    vote_id: VoteId,
+    title: String,
+    choose: Choose,
+    finish_time: Timestamp,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -69,15 +83,15 @@ pub struct Voter {
 fn convert(input: &InputVote, id: VoteId) -> Vote {
     Vote {
         id,
-        initiator: env::current_account_id(),
+        initiator: env::signer_account_id(),
         title: input.title.clone(),
         desc: input.desc.clone(),
         link: input.link.clone(),
         active: true,
         threshold: input.threshold,
         count: 0,
-        finish: UnorderedMap::new(VoteFinish(id)),
-        thinking: UnorderedSet::new(VoteThinking(id)),
+        finish: HashMap::new(),
+        thinking: input.thinking.clone(),
         create_time: env::block_timestamp(),
         finish_time: None,
     }
@@ -85,7 +99,7 @@ fn convert(input: &InputVote, id: VoteId) -> Vote {
 
 /// Get vote id from inputVote
 fn get_vote_id(input: &InputVote) -> VoteId {
-    let initiator = env::current_account_id();
+    let initiator = env::signer_account_id();
     let title = input.title.as_str();
 
     let desc = match &input.desc {
@@ -102,6 +116,7 @@ fn get_vote_id(input: &InputVote) -> VoteId {
     vec.as_slice().try_into().expect("error about get voteId")
 }
 
+#[near_bindgen]
 impl YesOrNoContract {
     pub fn create_vote(&mut self, input_vote: InputVote) -> VoteId {
         let id = get_vote_id(&input_vote);
@@ -144,9 +159,17 @@ impl YesOrNoContract {
         id
     }
 
-    pub fn get_active_vote_list(&self, index: u64, limit: u64) -> Vec<(VoteId, String)> {
+    /// get active vote list by accountId
+    ///
+    /// Ps,It's a bug to use `signer_account_id` in a view method
+    pub fn get_active_vote_list(
+        &self,
+        index: u64,
+        limit: u64,
+        account_id: AccountId,
+    ) -> Vec<ActiveVote> {
         let voter = &self.voter;
-        let voter_list = voter.get(&env::current_account_id());
+        let voter_list = voter.get(&account_id);
 
         match voter_list {
             None => {
@@ -160,7 +183,10 @@ impl YesOrNoContract {
                 }
 
                 (index..std::cmp::min(index + limit, thinking_set.len()))
-                    .map(|index| thinking_set.as_vector().get(index).unwrap())
+                    .map(|index| {
+                        let (vote_id, title) = thinking_set.as_vector().get(index).unwrap();
+                        ActiveVote { vote_id, title }
+                    })
                     .collect()
             }
         }
@@ -170,9 +196,10 @@ impl YesOrNoContract {
         &self,
         index: u64,
         limit: u64,
-    ) -> Vec<(VoteId, String, Choose, Timestamp)> {
+        account_id: AccountId,
+    ) -> Vec<FinishVote> {
         let voter = &self.voter;
-        let voter_option = voter.get(&env::current_account_id());
+        let voter_option = voter.get(&account_id);
 
         match voter_option {
             None => {
@@ -186,35 +213,45 @@ impl YesOrNoContract {
                 }
 
                 (index..std::cmp::min(index + limit, finish_set.len()))
-                    .map(|index| finish_set.as_vector().get(index).unwrap())
+                    .map(|index| {
+                        let (vote_id, title, choose, finish_time) =
+                            finish_set.as_vector().get(index).unwrap();
+                        FinishVote {
+                            vote_id,
+                            title,
+                            choose,
+                            finish_time,
+                        }
+                    })
                     .collect()
             }
         }
     }
 
-    pub fn vote(&mut self, id: VoteId, choose: Choose) {
+    pub fn vote(&mut self, vote_id: VoteId, choose: Choose) {
         let voter_map = &mut self.voter;
         let vote_map = &mut self.vote;
 
-        let mut vote = vote_map.get(&id).expect("no such vote");
-        let account_id = &env::current_account_id();
+        let mut vote = vote_map.get(&vote_id).expect("no such vote");
+        let account_id = env::signer_account_id();
+
         let mut voter = voter_map
-            .get(account_id)
+            .get(&account_id)
             .expect("no vote for this accountId");
 
         let title = &vote.title;
 
-        if !(&voter.thinking).contains(&(id, title.clone())) {
+        if !(&voter.thinking).contains(&(vote_id, title.clone())) {
             panic!("finished vote")
         }
 
-        (voter.thinking.borrow_mut()).remove(&(id, title.clone()));
+        (voter.thinking.borrow_mut()).remove(&(vote_id, title.clone()));
 
         let timestamp = env::block_timestamp();
-        (voter.finish.borrow_mut()).insert(&(id, title.clone(), choose, timestamp));
+        (voter.finish.borrow_mut()).insert(&(vote_id, title.clone(), choose, timestamp));
 
-        vote.thinking.remove(account_id);
-        vote.finish.insert(account_id, &(choose, timestamp));
+        vote.thinking.remove(account_id.as_str());
+        vote.finish.insert(account_id.clone(), (choose, timestamp));
 
         if choose {
             vote.count += 1;
@@ -227,14 +264,14 @@ impl YesOrNoContract {
         }
 
         // finish by no
-        if vote.thinking.len() + vote.count < vote.threshold {
+        if (vote.thinking.len() as u64) + vote.count < vote.threshold {
             vote.active = false;
             vote.finish_time = Some(timestamp);
         }
 
         // flush data
         voter_map.insert(
-            account_id,
+            &account_id,
             &Voter {
                 thinking: voter.thinking,
                 finish: voter.finish,
@@ -244,6 +281,7 @@ impl YesOrNoContract {
         vote_map.insert(&vote.id, &vote);
     }
 
+    // todo need change method
     pub fn get_vote(&self, vote_id: VoteId) -> Option<Vote> {
         (&self.vote).get(&vote_id)
     }
@@ -259,7 +297,7 @@ mod tests {
 
     fn get_context(is_view: bool, index: usize) -> VMContext {
         VMContextBuilder::new()
-            .current_account_id(accounts(index).try_into().unwrap())
+            .signer_account_id(accounts(index).try_into().unwrap())
             .is_view(is_view)
             .build()
     }
@@ -285,13 +323,33 @@ mod tests {
             let context = get_context(false, temp);
             testing_env!(context);
 
-            assert_eq!(contract.get_active_vote_list(0, 10).len(), 1);
-            assert_eq!(contract.get_finish_vote_list(0, 10).len(), 0);
+            assert_eq!(
+                contract
+                    .get_active_vote_list(0, 10, accounts(temp).try_into().unwrap())
+                    .len(),
+                1
+            );
+            assert_eq!(
+                contract
+                    .get_finish_vote_list(0, 10, accounts(temp).try_into().unwrap())
+                    .len(),
+                0
+            );
 
             contract.vote(vote_id, true);
 
-            assert_eq!(contract.get_active_vote_list(0, 10).len(), 0);
-            assert_eq!(contract.get_finish_vote_list(0, 10).len(), 1);
+            assert_eq!(
+                contract
+                    .get_active_vote_list(0, 10, accounts(temp).try_into().unwrap())
+                    .len(),
+                0
+            );
+            assert_eq!(
+                contract
+                    .get_finish_vote_list(0, 10, accounts(temp).try_into().unwrap())
+                    .len(),
+                1
+            );
         });
 
         let vote = contract.get_vote(vote_id).unwrap();
@@ -316,8 +374,8 @@ mod tests {
 
         contract.vote(vote_id, true);
 
-        let finish_vec = contract.get_finish_vote_list(0, 10);
-        let active_vec = contract.get_active_vote_list(0, 10);
+        let finish_vec = contract.get_finish_vote_list(0, 10, accounts(0).try_into().unwrap());
+        let active_vec = contract.get_active_vote_list(0, 10, accounts(0).try_into().unwrap());
         assert_eq!(finish_vec.len(), 1);
         assert_eq!(active_vec.len(), 0);
     }
@@ -342,7 +400,6 @@ mod tests {
             title: TEST_TITLE.to_string(),
             desc: None,
             link: None,
-            active: false,
             threshold: 2,
             thinking: range.map(|temp| accounts(temp).to_string()).collect(),
         }

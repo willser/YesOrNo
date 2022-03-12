@@ -1,4 +1,4 @@
-use crate::{ItemId, VoteId};
+use crate::ItemId;
 use near_sdk::borsh::{self, BorshSerialize};
 use near_sdk::{AccountId, BorshStorageKey};
 
@@ -10,8 +10,8 @@ pub enum ContractKeys {
 }
 #[derive(BorshStorageKey, BorshSerialize)]
 pub enum VoteKeys {
-    VoteFinish(VoteId),
-    VoteThinking(VoteId),
+    // VoteFinish(VoteId),
+    // VoteThinking(VoteId),
     VoterFinish(AccountId),
     VoterThinking(AccountId),
 }

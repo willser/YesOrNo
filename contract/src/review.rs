@@ -1,11 +1,12 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedSet;
-use near_sdk::{env, AccountId};
+use near_sdk::{env, near_bindgen, AccountId};
+use serde::Serialize;
 
 use crate::key::ItemKeys::{Active, Negative};
-use crate::{Choose, ItemId, YesOrNoContract};
-
-#[derive(BorshDeserialize, BorshSerialize)]
+use crate::YesOrNoContractContract;
+use crate::*;
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
 pub struct Item {
     id: ItemId,
 
@@ -17,11 +18,14 @@ pub struct Item {
 
     link: Option<String>,
 
+    #[serde(skip_serializing)]
     active: UnorderedSet<AccountId>,
 
+    #[serde(skip_serializing)]
     negative: UnorderedSet<AccountId>,
 }
 
+#[near_bindgen]
 impl YesOrNoContract {
     pub fn create_review(
         &mut self,
@@ -29,7 +33,7 @@ impl YesOrNoContract {
         desc: Option<String>,
         link: Option<String>,
     ) -> ItemId {
-        let initiator = env::current_account_id();
+        let initiator = env::signer_account_id();
 
         let empty = String::default();
 
@@ -69,7 +73,7 @@ impl YesOrNoContract {
 
         let item = &mut review.get(&item_id).expect("no such item.");
 
-        let account_id = &env::current_account_id();
+        let account_id = &env::signer_account_id();
 
         if opinion {
             item.negative.remove(account_id);
@@ -95,11 +99,12 @@ mod tests {
     use near_sdk::env;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::testing_env;
+    use near_sdk::MockedBlockchain;
 
     #[test]
     fn test_create_review() {
         let context = VMContextBuilder::new()
-            .current_account_id(accounts(1).try_into().unwrap())
+            .signer_account_id(accounts(1).try_into().unwrap())
             .is_view(false)
             .build();
 
@@ -129,7 +134,7 @@ mod tests {
     #[should_panic(expected = "no such item.")]
     fn test_illegal_id() {
         let context = VMContextBuilder::new()
-            .current_account_id(accounts(1).try_into().unwrap())
+            .signer_account_id(accounts(1).try_into().unwrap())
             .is_view(false)
             .build();
 

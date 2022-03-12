@@ -9,6 +9,7 @@ authors = ["will"]
 
 [dependencies]
 near-sdk = "3.1.0"
+serde = { version = "1.0", features = ["derive"] }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -17,3 +18,13 @@ crate-type = ["cdylib", "rlib"]
 [dev-dependencies]
 #near-primitives-core="0.4.0"
 #borsh = "0.8.2"
+
+[profile.release]
+codegen-units = 1
+# Tell `rustc` to optimize for small code size.
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+# Opt into extra safety checks on arithmetic operations https://stackoverflow.com/a/64136471/249801
+overflow-checks = true

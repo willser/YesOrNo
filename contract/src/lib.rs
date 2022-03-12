@@ -1,6 +1,6 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap};
-use near_sdk::{init, PanicOnDefault};
+use near_sdk::PanicOnDefault;
 use near_sdk::{near_bindgen, AccountId};
 
 use crate::key::ContractKeys;
@@ -15,6 +15,7 @@ mod vote;
 
 near_sdk::setup_alloc!();
 
+#[allow(unused)]
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct YesOrNoContract {
@@ -25,6 +26,7 @@ pub struct YesOrNoContract {
     review: UnorderedMap<ItemId, Item>,
 }
 
+#[near_bindgen]
 impl YesOrNoContract {
     #[init]
     pub fn new() -> Self {
