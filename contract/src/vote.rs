@@ -80,18 +80,18 @@ pub struct Voter {
 }
 
 /// convert InputVote to Vote
-fn convert(input: &InputVote, id: VoteId) -> Vote {
+fn convert(input: InputVote, id: VoteId) -> Vote {
     Vote {
         id,
         initiator: env::signer_account_id(),
-        title: input.title.clone(),
-        desc: input.desc.clone(),
-        link: input.link.clone(),
+        title: input.title,
+        desc: input.desc,
+        link: input.link,
         active: true,
         threshold: input.threshold,
         count: 0,
         finish: HashMap::new(),
-        thinking: input.thinking.clone(),
+        thinking: input.thinking,
         create_time: env::block_timestamp(),
         finish_time: None,
     }
@@ -153,7 +153,7 @@ impl YesOrNoContract {
             panic!("illegal threshold or participant number");
         }
 
-        let vote = convert(&input_vote, id);
+        let vote = convert(input_vote, id);
 
         vote_map.insert(&id, &vote);
         id
